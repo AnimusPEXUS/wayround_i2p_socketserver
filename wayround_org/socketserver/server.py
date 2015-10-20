@@ -7,6 +7,8 @@ import socket
 import threading
 import logging
 import datetime
+import time
+import select
 
 
 def _ssfw(
@@ -38,6 +40,9 @@ class SocketServer:
             ):
         """
         The socket must be bound to an address and listening for connections
+
+        This class is designated to work with non-blocking sockets.
+        Work with blocking sockets - not tested.
 
         func - must be callable and accept arguments:
             utc_datetime - probably taken from datetime.utcnow()
@@ -83,31 +88,44 @@ class SocketServer:
         return
 
     def wait(self):
-        self._acceptor_thread.join()
+        while True:
+            time.sleep(1)
+            if self._acceptor_thread is None:
+                break
         return
 
     def stop(self):
         self._server_stop_flag.set()
+
         if self._acceptor_thread:
             self._acceptor_thread.join()
+
         return
 
     def _acceptor_thread_method(self):
+
         while True:
+
             if self._server_stop_flag.is_set():
                 break
-            res = self.sock.accept()
-            thr = threading.Thread(
-                target=_ssfw,
-                args=(
-                    self._func,
-                    self._trans_id_gen(),
-                    self,
-                    self._server_stop_flag,
-                    res[0],
-                    res[1])
-                )
-            thr.start()
+
+            selres = select.select([self.sock], [], [], 0.5)
+            if len(selres[0]) != 0:
+                # print("_acceptor_thread_method selected")
+                res = self.sock.accept()
+                thr = threading.Thread(
+                    target=_ssfw,
+                    args=(
+                        self._func,
+                        self._trans_id_gen(),
+                        self,
+                        self._server_stop_flag,
+                        res[0],
+                        res[1]
+                        )
+                    )
+                thr.start()
+            # print("_acceptor_thread_method tic")
 
         self._acceptor_thread = None
         return
