@@ -75,7 +75,7 @@ class SocketServer:
         self._server_stop_flag.clear()
 
         self._acceptor_thread = None
-
+        
         return
 
     def start(self):
@@ -113,6 +113,7 @@ class SocketServer:
             if len(selres[0]) != 0:
                 # print("_acceptor_thread_method selected")
                 res = self.sock.accept()
+                res[0].setblocking(False)
                 thr = threading.Thread(
                     target=_ssfw,
                     args=(
