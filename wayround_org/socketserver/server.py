@@ -19,6 +19,10 @@ def _ssfw(
         sock,
         addr
         ):
+    """
+    This function is simply a wrapper for adding possible actions around func
+    call
+    """
     func(
         transaction_id,
         serv,
@@ -26,7 +30,6 @@ def _ssfw(
         sock,
         addr
         )
-    sock.shutdown(socket.SHUT_WR)
     return
 
 
@@ -75,7 +78,7 @@ class SocketServer:
         self._server_stop_flag.clear()
 
         self._acceptor_thread = None
-        
+
         return
 
     def start(self):
@@ -110,11 +113,12 @@ class SocketServer:
                 break
 
             selres = select.select([self.sock], [], [], 0.5)
+
             if len(selres[0]) != 0:
-                # print("_acceptor_thread_method selected")
                 res = self.sock.accept()
                 res[0].setblocking(False)
                 thr = threading.Thread(
+                    name="_acceptor_thread_method child",
                     target=_ssfw,
                     args=(
                         self._func,
