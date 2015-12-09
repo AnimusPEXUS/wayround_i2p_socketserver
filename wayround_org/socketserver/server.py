@@ -33,16 +33,31 @@ def _ssfw(
     return
 
 
+class SSLConfig:
+
+    def __init__(self, data_dict):
+        self.keyfile = None
+        if 'keyfile' in socket_data_dict:
+            self.keyfile = socket_data_dict['keyfile']
+
+        self.certfile = socket_data_dict['certfile']
+        return
+
+
 class SocketServer:
 
     def __init__(
             self,
             sock,
             func,
-            unique_transaction_id_generator=datetime.datetime.utcnow
+            unique_transaction_id_generator=datetime.datetime.utcnow,
+            ssl_config=None
             ):
         """
-        The socket must be bound to an address and listening for connections
+
+        The socket must be bound to an address and listening for connections.
+        You can pass None here, but be sure to use set_sock method
+        before start method
 
         This class is designated to work with non-blocking sockets.
         Work with blocking sockets - not tested.
@@ -68,7 +83,12 @@ class SocketServer:
         if not callable(func):
             raise ValueError("`func' must be callable")
 
-        self.sock = sock
+        if not ssl_cofig is None and not isinstance(ssl_cofig, SSLConfig):
+            raise TypeError(
+                "`ssl_cofig' must be of type SSLConfig"
+                )
+
+        self.ssl_config = ssl_config
 
         self._func = func
 
@@ -79,7 +99,43 @@ class SocketServer:
 
         self._acceptor_thread = None
 
+        self.set_sock(sock)
+
         return
+
+    def wrap(self):
+        self.sock = ssl.wrap_socket(
+            self.sock,
+            server_side=True,
+
+            keyfile=self.ssl_config.keyfile,
+            certfile=self.ssl_config.certfile,
+
+            # TODO: need conf
+            # cert_reqs=CERT_NONE,
+            # ssl_version={see docs},
+            # ciphers=None
+
+            # ca_certs=None,
+            # do_handshake_on_connect=True,
+            # suppress_ragged_eofs=True,
+            do_handshake_on_connect=False
+            )
+        return
+
+    def unwrap(self):
+        self.sock = self.sock.unwrap()
+        return
+
+    def set_sock(self, sock):
+        """
+        If You need to change socket after construction, but before start
+        """
+        self.sock = sock
+        return
+
+    def get_sock(self):
+        return self.sock
 
     def start(self):
         self._server_stop_flag.clear()
@@ -116,7 +172,11 @@ class SocketServer:
 
             if len(selres[0]) != 0:
                 res = self.sock.accept()
-                res[0].setblocking(False)
+
+                # NOTE: do not make child sockets non-blocking here.
+                #       do them so in threads
+                # res[0].setblocking(False)
+
                 thr = threading.Thread(
                     name="_acceptor_thread_method child",
                     target=_ssfw,
@@ -134,3 +194,7 @@ class SocketServer:
 
         self._acceptor_thread = None
         return
+
+
+# TODO: transfere here from webserver and from mail SSL wrappers for socket
+#       server
