@@ -9,6 +9,7 @@ import logging
 import datetime
 import time
 import select
+import ssl
 
 
 def _ssfw(
@@ -37,11 +38,18 @@ class SSLConfig:
 
     def __init__(self, data_dict):
         self.keyfile = None
-        if 'keyfile' in socket_data_dict:
-            self.keyfile = socket_data_dict['keyfile']
+        if 'keyfile' in data_dict:
+            self.keyfile = data_dict['keyfile']
 
-        self.certfile = socket_data_dict['certfile']
+        self.certfile = data_dict['certfile']
         return
+
+    def repr_as_text(self):
+        ret = "keyfile: {}, certfile: {}".format(
+            self.keyfile,
+            self.certfile
+            )
+        return ret
 
 
 class SocketServer:
@@ -51,7 +59,8 @@ class SocketServer:
             sock,
             func,
             unique_transaction_id_generator=datetime.datetime.utcnow,
-            ssl_config=None
+            ssl_config=None,
+            thread_name=None
             ):
         """
 
@@ -83,12 +92,20 @@ class SocketServer:
         if not callable(func):
             raise ValueError("`func' must be callable")
 
-        if not ssl_cofig is None and not isinstance(ssl_cofig, SSLConfig):
+        if not ssl_config is None and not isinstance(ssl_config, SSLConfig):
             raise TypeError(
-                "`ssl_cofig' must be of type SSLConfig"
+                "`ssl_config' must be of type SSLConfig"
+                )
+
+        if (unique_transaction_id_generator is not None
+                and not callable(unique_transaction_id_generator)):
+            raise ValueError(
+                "`unique_transaction_id_generator' must be callable if defined"
                 )
 
         self.ssl_config = ssl_config
+
+        self.thread_name = thread_name
 
         self._func = func
 
@@ -103,7 +120,14 @@ class SocketServer:
 
         return
 
+    def get_is_ssl_config_defined(self):
+        return isinstance(self.ssl_config, SSLConfig)
+
     def wrap(self):
+
+        if not self.get_is_ssl_config_defined():
+            raise Exception("`ssl_config' is invalid")
+
         self.sock = ssl.wrap_socket(
             self.sock,
             server_side=True,
@@ -138,9 +162,10 @@ class SocketServer:
         return self.sock
 
     def start(self):
-        self._server_stop_flag.clear()
         if self._acceptor_thread is None:
+            self._server_stop_flag.clear()
             self._acceptor_thread = threading.Thread(
+                name=self.thread_name,
                 target=self._acceptor_thread_method
                 )
             self._acceptor_thread.start()
@@ -148,9 +173,9 @@ class SocketServer:
 
     def wait(self):
         while True:
-            time.sleep(1)
             if self._acceptor_thread is None:
                 break
+            time.sleep(1)
         return
 
     def stop(self):
@@ -190,11 +215,6 @@ class SocketServer:
                         )
                     )
                 thr.start()
-            # print("_acceptor_thread_method tic")
 
         self._acceptor_thread = None
         return
-
-
-# TODO: transfere here from webserver and from mail SSL wrappers for socket
-#       server
