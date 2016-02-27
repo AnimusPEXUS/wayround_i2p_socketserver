@@ -196,8 +196,13 @@ class SocketServer:
             selres = select.select([self.sock], [], [], 0.5)
 
             if len(selres[0]) != 0:
-                res = self.sock.accept()
-
+                try:
+                    res = self.sock.accept()
+                except OSError as err:
+                    if err.errno in [9, 22]:
+                        break
+                    else:
+                        raise
                 # NOTE: do not make child sockets non-blocking here.
                 #       do them so in threads
                 # res[0].setblocking(False)

@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='wayround_org_socketserver',
-    version='0.1.2',
+    version='0.1.3',
     description='socket server realisation',
     author='Alexey Gorshkov',
     author_email='animus@wayround.org',
